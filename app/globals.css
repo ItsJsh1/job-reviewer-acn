@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+body {
+  background-color: #FAFAF9;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(20,18,31,0.06) 1px, transparent 0);
+  background-size: 24px 24px;
+  color: #14121F;
+}
+
+/* Perforated "ticket stub" edge used on reviewer cards — the signature
+   element tying the UI back to the idea of an assessment ticket. */
+.ticket-notch {
+  background-image: radial-gradient(circle at 0 50%, #FAFAF9 8px, transparent 8.5px),
+    radial-gradient(circle at 100% 50%, #FAFAF9 8px, transparent 8.5px);
+  background-position: left center, right center;
+  background-repeat: no-repeat;
+  background-size: 16px 100%;
+}
+
+::selection {
+  background: #7B2FF7;
+  color: #FAFAF9;
+}
+
+:focus-visible {
+  outline: 2px solid #7B2FF7;
+  outline-offset: 2px;
+}

@@ -1,0 +1,67 @@
+// This schema is ready for Stage 2/3 of the build order (see README).
+// Run `npx prisma migrate dev` once DATABASE_URL is set in .env.local.
+//
+// DATABASE_URL: the pooled connection (port 6543) — used by the running
+// app, safe for serverless functions.
+// DIRECT_URL: the direct, non-pooled connection (port 5432) — used only
+// when running `prisma migrate` / `prisma db seed`, since migrations need
+// a connection type poolers like Supabase's don't support.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Reviewer {
+  id        String     @id @default(cuid())
+  title     String
+  category  String // "Behavioral" | "Cognitive" | "Technical" | "Communication" | "HR"
+  subType   String? // e.g. "Reading", "Story Retelling", "Initial", "Final"
+  questions Question[]
+  attempts  Attempt[]
+  createdAt DateTime   @default(now())
+}
+
+model Question {
+  id         String   @id @default(cuid())
+  reviewerId String
+  reviewer   Reviewer @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  prompt     String
+  type       String // "text" | "audio" | "mcq" | "coding"
+  rubric     String? // guidance the AI uses to grade
+  options    Json? // for MCQ
+  order      Int      @default(0)
+  responses  Response[]
+}
+
+model Attempt {
+  id           String     @id @default(cuid())
+  reviewerId   String?
+  reviewer     Reviewer?  @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  kind         String     @default("reviewer") // "reviewer" | "typing" | "versant"
+  standaloneTitle    String? // used when kind != "reviewer" (no reviewer to look up a title from)
+  standaloneCategory String?
+  startedAt    DateTime   @default(now())
+  finishedAt   DateTime?
+  overallScore Float?
+  extra        Json? // freeform stats for typing/versant (wpm, accuracy, subscores, etc.)
+  responses    Response[]
+}
+
+model Response {
+  id         String   @id @default(cuid())
+  attemptId  String
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  answerText String?
+  audioUrl   String?
+  transcript String?
+  aiScore    Float?
+  aiFeedback String?
+}
