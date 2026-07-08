@@ -16,6 +16,11 @@ export default function AdminPage() {
   const [selected, setSelected] = useState(null);
   const [showNewReviewer, setShowNewReviewer] = useState(false);
   const [showNewQuestion, setShowNewQuestion] = useState(false);
+  const [editingReviewer, setEditingReviewer] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [reviewerEditDraft, setReviewerEditDraft] = useState({ title: "", category: CATEGORIES[0], subType: "" });
+  const [reviewerPage, setReviewerPage] = useState(1);
+  const [questionPage, setQuestionPage] = useState(1);
   const [newReviewer, setNewReviewer] = useState({ title: "", category: CATEGORIES[0], subType: "" });
 
   async function refreshList() {
@@ -29,13 +34,32 @@ export default function AdminPage() {
     setSelected(await res.json());
   }
 
+  const REVIEWERS_PER_PAGE = 10;
+  const QUESTIONS_PER_PAGE = 10;
+
   useEffect(() => {
     refreshList();
   }, []);
 
   useEffect(() => {
     refreshSelected(selectedId);
+    setQuestionPage(1);
   }, [selectedId]);
+
+  const totalReviewerPages = Math.max(1, Math.ceil(reviewers.length / REVIEWERS_PER_PAGE));
+  const totalQuestionPages = selected
+    ? Math.max(1, Math.ceil(selected.questions.length / QUESTIONS_PER_PAGE))
+    : 1;
+  const visibleReviewers = reviewers.slice(
+    (reviewerPage - 1) * REVIEWERS_PER_PAGE,
+    reviewerPage * REVIEWERS_PER_PAGE
+  );
+  const visibleQuestions = selected
+    ? selected.questions.slice(
+        (questionPage - 1) * QUESTIONS_PER_PAGE,
+        questionPage * QUESTIONS_PER_PAGE
+      )
+    : [];
 
   async function handleCreateReviewer(e) {
     e.preventDefault();
@@ -75,12 +99,125 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reviewerId: selectedId, questionId }),
     });
+    if (editingQuestion?.id === questionId) setEditingQuestion(null);
+    await refreshSelected(selectedId);
+    await refreshList();
+  }
+
+  async function handleUpdateReviewerDraft(e) {
+    e.preventDefault();
+    await fetch(`/api/reviewers/${selectedId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: reviewerEditDraft.title,
+        category: reviewerEditDraft.category,
+        subType: reviewerEditDraft.subType || null,
+      }),
+    });
+    setEditingReviewer(false);
+    await refreshList();
+    await refreshSelected(selectedId);
+  }
+
+  async function handleUpdateQuestion(question) {
+    await fetch("/api/questions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewerId: selectedId,
+        questionId: editingQuestion.id,
+        ...question,
+      }),
+    });
+    setEditingQuestion(null);
     await refreshSelected(selectedId);
     await refreshList();
   }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
+      {(showNewQuestion || editingQuestion || editingReviewer) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-2xl">
+            <div className="rounded-card border border-slate-light bg-white p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-ink">
+                    {editingReviewer ? "Edit reviewer" : editingQuestion ? "Edit question" : "New question"}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowNewQuestion(false);
+                    setEditingQuestion(null);
+                    setEditingReviewer(false);
+                  }}
+                  className="text-xs font-mono uppercase text-slate hover:text-violet"
+                >
+                  Close
+                </button>
+              </div>
+              {editingReviewer ? (
+                <form onSubmit={handleUpdateReviewerDraft} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-slate mb-1">Title</label>
+                    <input
+                      value={reviewerEditDraft.title}
+                      onChange={(e) => setReviewerEditDraft({ ...reviewerEditDraft, title: e.target.value })}
+                      className="w-full rounded-lg border border-slate-light p-3 text-sm outline-none focus:border-violet"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-slate mb-1">Category</label>
+                      <select
+                        value={reviewerEditDraft.category}
+                        onChange={(e) => setReviewerEditDraft({ ...reviewerEditDraft, category: e.target.value, subType: "" })}
+                        className="w-full rounded-lg border border-slate-light p-3 text-sm outline-none focus:border-violet"
+                      >
+                        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {SUBTYPES[reviewerEditDraft.category] && (
+                      <div>
+                        <label className="block text-xs font-mono text-slate mb-1">Sub-type</label>
+                        <select
+                          value={reviewerEditDraft.subType}
+                          onChange={(e) => setReviewerEditDraft({ ...reviewerEditDraft, subType: e.target.value })}
+                          className="w-full rounded-lg border border-slate-light p-3 text-sm outline-none focus:border-violet"
+                        >
+                          <option value="">Select sub-type</option>
+                          {SUBTYPES[reviewerEditDraft.category].map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button type="submit" className="font-mono text-xs px-4 py-2 rounded-lg bg-ink text-paper hover:bg-violet transition-colors">Save</button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingReviewer(false)}
+                      className="font-mono text-xs px-4 py-2 rounded-lg border border-slate-light text-slate hover:border-violet hover:text-violet transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <QuestionForm
+                  initial={editingQuestion || undefined}
+                  onSubmit={editingQuestion ? handleUpdateQuestion : handleAddQuestion}
+                  onCancel={() => {
+                    setShowNewQuestion(false);
+                    setEditingQuestion(null);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-8">
         <div>
           <p className="font-mono text-xs tracking-widest text-violet uppercase mb-2">Admin</p>
@@ -132,7 +269,7 @@ export default function AdminPage() {
           )}
 
           <ul className="space-y-2">
-            {reviewers.map((r) => (
+            {visibleReviewers.map((r) => (
               <li key={r.id}>
                 <button
                   onClick={() => setSelectedId(r.id)}
@@ -149,6 +286,25 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
+          {reviewers.length > REVIEWERS_PER_PAGE && (
+            <div className="flex items-center justify-between text-xs text-slate mt-3">
+              <button
+                onClick={() => setReviewerPage((p) => Math.max(1, p - 1))}
+                disabled={reviewerPage === 1}
+                className="rounded-lg border border-slate-light px-3 py-2 text-left disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span>Page {reviewerPage} / {totalReviewerPages}</span>
+              <button
+                onClick={() => setReviewerPage((p) => Math.min(totalReviewerPages, p + 1))}
+                disabled={reviewerPage === totalReviewerPages}
+                className="rounded-lg border border-slate-light px-3 py-2 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Selected reviewer detail */}
@@ -157,44 +313,102 @@ export default function AdminPage() {
             <p className="text-slate text-sm">Select a reviewer on the left, or create a new one.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-display text-xl font-semibold text-ink">{selected.title}</h2>
-                <button
-                  onClick={() => handleDeleteReviewer(selected.id)}
-                  className="text-xs text-slate hover:text-red-600"
-                >
-                  Delete reviewer
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-ink">{selected.title}</h2>
+                  <p className="text-xs text-slate">{selected.category}{selected.subType ? ` · ${selected.subType}` : ""}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setReviewerEditDraft({ title: selected.title, category: selected.category, subType: selected.subType || "" });
+                      setEditingReviewer(true);
+                      setShowNewQuestion(false);
+                      setEditingQuestion(null);
+                    }}
+                    className="text-xs text-slate hover:text-violet"
+                  >
+                    Edit reviewer
+                  </button>
+                  <button
+                    onClick={() => handleDeleteReviewer(selected.id)}
+                    className="text-xs text-slate hover:text-red-600"
+                  >
+                    Delete reviewer
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3">
-                {selected.questions.map((q, i) => (
+                {visibleQuestions.map((q, index) => (
                   <div key={q.id} className="rounded-card border border-slate-light bg-white/70 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className="font-mono text-xs text-violet">Q{i + 1} · {q.type}</span>
+                        <span className="font-mono text-xs text-violet">Q{(questionPage - 1) * QUESTIONS_PER_PAGE + index + 1} · {q.type}</span>
                         <p className="text-sm text-ink mt-1">{q.prompt}</p>
                         {q.rubric && <p className="text-xs text-slate mt-1">Rubric: {q.rubric}</p>}
+                        {q.timeLimitSeconds && (
+                          <p className="text-xs text-slate mt-1">Suggested time: {q.timeLimitSeconds}s</p>
+                        )}
                       </div>
-                      <button
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        className="text-xs text-slate hover:text-red-600 shrink-0"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                          onClick={() => {
+                            setEditingQuestion(q);
+                            setShowNewQuestion(false);
+                          }}
+                          className="text-xs text-slate hover:text-violet"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteQuestion(q.id)}
+                          className="text-xs text-slate hover:text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+              {selected && selected.questions.length > QUESTIONS_PER_PAGE && (
+                <div className="flex items-center justify-between text-xs text-slate mt-3">
+                  <button
+                    onClick={() => setQuestionPage((p) => Math.max(1, p - 1))}
+                    disabled={questionPage === 1}
+                    className="rounded-lg border border-slate-light px-3 py-2 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span>Page {questionPage} / {totalQuestionPages}</span>
+                  <button
+                    onClick={() => setQuestionPage((p) => Math.min(totalQuestionPages, p + 1))}
+                    disabled={questionPage === totalQuestionPages}
+                    className="rounded-lg border border-slate-light px-3 py-2 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
 
-              {showNewQuestion ? (
+              {editingQuestion ? (
+                <QuestionForm
+                  initial={editingQuestion}
+                  onSubmit={handleUpdateQuestion}
+                  onCancel={() => setEditingQuestion(null)}
+                />
+              ) : showNewQuestion ? (
                 <QuestionForm
                   onSubmit={handleAddQuestion}
                   onCancel={() => setShowNewQuestion(false)}
                 />
               ) : (
                 <button
-                  onClick={() => setShowNewQuestion(true)}
+                  onClick={() => {
+                    setShowNewQuestion(true);
+                    setEditingQuestion(null);
+                  }}
                   className="font-mono text-xs px-3 py-2 rounded-lg border border-slate-light hover:border-violet hover:text-violet transition-colors"
                 >
                   + Add question

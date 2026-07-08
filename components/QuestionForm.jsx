@@ -16,6 +16,9 @@ export default function QuestionForm({ initial, onSubmit, onCancel }) {
   const [optionsText, setOptionsText] = useState(
     initial?.options ? initial.options.join(", ") : ""
   );
+  const [timeLimit, setTimeLimit] = useState(
+    initial?.timeLimitSeconds?.toString() || ""
+  );
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -26,6 +29,7 @@ export default function QuestionForm({ initial, onSubmit, onCancel }) {
       options: type === "mcq" && optionsText.trim()
         ? optionsText.split(",").map((s) => s.trim()).filter(Boolean)
         : null,
+      timeLimitSeconds: timeLimit ? Number(timeLimit) : null,
     });
   }
 
@@ -79,6 +83,20 @@ export default function QuestionForm({ initial, onSubmit, onCancel }) {
           rows={2}
           className="w-full rounded-lg border border-slate-light p-3 text-sm focus:border-violet outline-none"
           placeholder="What should a strong answer include?"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-mono text-slate mb-1">
+          Suggested time to take this question (seconds)
+        </label>
+        <input
+          type="number"
+          min="0"
+          value={timeLimit}
+          onChange={(e) => setTimeLimit(e.target.value)}
+          className="w-full rounded-lg border border-slate-light p-3 text-sm focus:border-violet outline-none"
+          placeholder="e.g. 60"
         />
       </div>
 

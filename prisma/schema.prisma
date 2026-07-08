@@ -28,15 +28,16 @@ model Reviewer {
 }
 
 model Question {
-  id         String   @id @default(cuid())
-  reviewerId String
-  reviewer   Reviewer @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
-  prompt     String
-  type       String // "text" | "audio" | "mcq" | "coding"
-  rubric     String? // guidance the AI uses to grade
-  options    Json? // for MCQ
-  order      Int      @default(0)
-  responses  Response[]
+  id               String   @id @default(cuid())
+  reviewerId       String
+  reviewer         Reviewer @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  prompt           String
+  type             String // "text" | "audio" | "mcq" | "coding"
+  rubric           String? // guidance the AI uses to grade
+  options          Json? // for MCQ
+  timeLimitSeconds Int?    // optional suggested time to spend on this question
+  order            Int      @default(0)
+  responses        Response[]
 }
 
 model Attempt {

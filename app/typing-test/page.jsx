@@ -47,6 +47,17 @@ export default function TypingTestPage() {
     return () => clearInterval(timerRef.current);
   }, []);
 
+  function saveAttemptLocally(attempt) {
+    if (typeof window === "undefined") return;
+    try {
+      const existing = JSON.parse(localStorage.getItem("accenture-attempts") || "[]");
+      const updated = [attempt, ...existing.filter((item) => item.id !== attempt.id)];
+      localStorage.setItem("accenture-attempts", JSON.stringify(updated.slice(0, 50)));
+    } catch (error) {
+      console.error("Failed to store typing attempt locally", error);
+    }
+  }
+
   function startTest() {
     setTyped("");
     setSecondsLeft(TEST_DURATION_SECONDS);
@@ -78,6 +89,7 @@ export default function TypingTestPage() {
       body: JSON.stringify({ targetWpm, actualWpm, accuracy, passage, typed }),
     });
     const attempt = await res.json();
+    saveAttemptLocally(attempt);
     setResult({ attempt, actualWpm, accuracy });
     setPhase("done");
   }
@@ -103,7 +115,15 @@ export default function TypingTestPage() {
     const feedback = result.attempt.extra?.feedback || {};
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <p className="font-mono text-xs tracking-widest text-violet uppercase mb-2">Typing Test — Result</p>
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => router.back()}
+            className="font-mono text-xs px-3 py-2 rounded-lg border border-slate-light hover:border-violet hover:text-violet transition-colors"
+          >
+            ← Back
+          </button>
+          <p className="font-mono text-xs tracking-widest text-violet uppercase">Typing Test — Result</p>
+        </div>
         <div className="flex items-center gap-3 mb-6">
           <h1 className="font-display text-3xl font-bold text-ink">
             {result.actualWpm} WPM · {result.accuracy}% accuracy
@@ -202,22 +222,35 @@ export default function TypingTestPage() {
 
       {(phase === "running" || phase === "submitting") && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-violet">Target: {targetWpm} WPM</span>
-            <span className="font-mono text-xs text-ink">{secondsLeft}s left</span>
+          <div className="rounded-card border border-slate-light bg-white/70 p-8">
+            <div className="mb-6 space-y-2">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <p className="font-mono text-xs text-violet mb-1">Target</p>
+                  <p className="font-display text-2xl font-bold text-ink">{targetWpm} WPM</p>
+                </div>
+                <div>
+                  <p className="font-mono text-xs text-ink mb-1">Time left</p>
+                  <p className="font-display text-2xl font-bold text-ink">{secondsLeft}s</p>
+                </div>
+                <div>
+                  <p className="font-mono text-xs text-slate mb-1">Words typed</p>
+                  <p className="font-display text-2xl font-bold text-ink">{typed.trim().split(/\s+/).filter(Boolean).length}</p>
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-950/95 p-6 min-h-[140px]">
+                <p className="text-base leading-7 text-white font-mono whitespace-pre-wrap break-words">{passage}</p>
+              </div>
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              disabled={phase === "submitting"}
+              className="w-full min-h-[200px] rounded-xl border border-slate-light bg-slate-50 p-4 text-base leading-6 font-mono outline-none focus:border-violet"
+              placeholder="Type the passage above…"
+            />
           </div>
-          <div className="rounded-card border border-slate-light bg-white/70 p-6">
-            <p className="text-ink select-none">{passage}</p>
-          </div>
-          <textarea
-            ref={textareaRef}
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            disabled={phase === "submitting"}
-            rows={5}
-            className="w-full rounded-card border border-slate-light p-4 text-sm outline-none focus:border-violet"
-            placeholder="Start typing the passage above…"
-          />
           <button
             onClick={finishTest}
             disabled={phase === "submitting"}

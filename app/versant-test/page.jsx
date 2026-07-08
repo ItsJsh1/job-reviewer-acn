@@ -18,6 +18,17 @@ export default function VersantTestPage() {
   const task = VERSANT_TASKS[step];
   const isLast = step === VERSANT_TASKS.length - 1;
 
+  function saveAttemptLocally(attempt) {
+    if (typeof window === "undefined") return;
+    try {
+      const existing = JSON.parse(localStorage.getItem("accenture-attempts") || "[]");
+      const updated = [attempt, ...existing.filter((item) => item.id !== attempt.id)];
+      localStorage.setItem("accenture-attempts", JSON.stringify(updated.slice(0, 50)));
+    } catch (error) {
+      console.error("Failed to store versant attempt locally", error);
+    }
+  }
+
   async function handleNext() {
     if (!audioBlob) return alert("Please record an answer first.");
 
@@ -46,6 +57,7 @@ export default function VersantTestPage() {
       body: JSON.stringify({ tasks: finalTranscripts }),
     });
     const attempt = await res.json();
+    saveAttemptLocally(attempt);
     setResult(attempt);
     setSubmitting(false);
   }
@@ -55,7 +67,15 @@ export default function VersantTestPage() {
     const sub = feedback.subscores || {};
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <p className="font-mono text-xs tracking-widest text-violet uppercase mb-2">Versant Test — Result</p>
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => router.back()}
+            className="font-mono text-xs px-3 py-2 rounded-lg border border-slate-light hover:border-violet hover:text-violet transition-colors"
+          >
+            ← Back
+          </button>
+          <p className="font-mono text-xs tracking-widest text-violet uppercase">Versant Test — Result</p>
+        </div>
         <div className="flex items-center gap-3 mb-6">
           <h1 className="font-display text-2xl font-bold text-ink">Overall Score</h1>
           <ScoreBadge score={result.overallScore} />
