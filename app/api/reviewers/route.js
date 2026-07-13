@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listReviewers, createReviewer } from "@/lib/data";
+import { listReviewers, createReviewer, deleteReviewer } from "@/lib/data";
 
 export async function GET() {
   return NextResponse.json(await listReviewers());
@@ -19,4 +19,15 @@ export async function POST(request) {
     subType: body.subType || null,
   });
   return NextResponse.json(reviewer, { status: 201 });
+}
+
+export async function DELETE(request) {
+  const body = await request.json();
+  const reviewerId = body?.reviewerId;
+  if (!reviewerId) {
+    return NextResponse.json({ error: "reviewerId is required" }, { status: 400 });
+  }
+  const ok = await deleteReviewer(reviewerId);
+  if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ deleted: true });
 }

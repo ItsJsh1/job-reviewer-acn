@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import QuestionForm from "@/components/QuestionForm";
 
@@ -41,6 +41,9 @@ export default function AdminPage() {
     refreshList();
   }, []);
 
+  const dragReviewerIdRef = useRef(null);
+  const dragQuestionIdRef = useRef(null);
+
   useEffect(() => {
     refreshSelected(selectedId);
     setQuestionPage(1);
@@ -77,9 +80,22 @@ export default function AdminPage() {
 
   async function handleDeleteReviewer(id) {
     if (!confirm("Delete this reviewer and all its questions?")) return;
-    await fetch(`/api/reviewers/${id}`, { method: "DELETE" });
-    if (selectedId === id) setSelectedId(null);
+    const res = await fetch("/api/reviewers", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewerId: id }),
+    });
+    if (!res.ok) {
+      alert("Failed to delete reviewer.");
+      return;
+    }
+    if (selectedId === id) {
+      setSelectedId(null);
+      setSelected(null);
+      setQuestionPage(1);
+    }
     await refreshList();
+    setReviewerPage(1);
   }
 
   async function handleAddQuestion(question) {
@@ -272,6 +288,38 @@ export default function AdminPage() {
             {visibleReviewers.map((r) => (
               <li key={r.id}>
                 <button
+                  draggable
+                  onDragStart={(e) => {
+                    dragReviewerIdRef.current = r.id;
+                    e.dataTransfer?.setData("text/plain", r.id);
+                    e.dataTransfer?.setData("application/my-app", r.id);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const draggedId = dragReviewerIdRef.current || e.dataTransfer?.getData("text/plain");
+                    if (!draggedId || draggedId === r.id) return;
+                    const arr = [...reviewers];
+                    const draggedIdx = arr.findIndex((x) => x.id === draggedId);
+                    const targetIdx = arr.findIndex((x) => x.id === r.id);
+                    if (draggedIdx === -1 || targetIdx === -1) return;
+                    const [dragged] = arr.splice(draggedIdx, 1);
+                    arr.splice(targetIdx, 0, dragged);
+                    const base = Date.now();
+                    // Persist new ordering (higher = top)
+                    await Promise.all(
+                      arr.map((item, i) =>
+                        fetch(`/api/reviewers/${item.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ order: base + (arr.length - i) }),
+                        })
+                      )
+                    );
+                    await refreshList();
+                    dragReviewerIdRef.current = null;
+                  }}
                   onClick={() => setSelectedId(r.id)}
                   className={`w-full text-left rounded-lg border p-3 text-sm transition-colors ${
                     selectedId === r.id ? "border-violet bg-violet-tint" : "border-slate-light bg-white/60 hover:border-violet"
@@ -341,7 +389,42 @@ export default function AdminPage() {
 
               <div className="space-y-3">
                 {visibleQuestions.map((q, index) => (
-                  <div key={q.id} className="rounded-card border border-slate-light bg-white/70 p-4">
+                  <div
+                    key={q.id}
+                    draggable
+                    onDragStart={(e) => {
+                      dragQuestionIdRef.current = q.id;
+                      e.dataTransfer?.setData("text/plain", q.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      const draggedId = dragQuestionIdRef.current || e.dataTransfer?.getData("text/plain");
+                      if (!draggedId || draggedId === q.id) return;
+                      const arr = selected ? [...selected.questions] : [];
+                      const draggedIdx = arr.findIndex((x) => x.id === draggedId);
+                      const targetIdx = arr.findIndex((x) => x.id === q.id);
+                      if (draggedIdx === -1 || targetIdx === -1) return;
+                      const [dragged] = arr.splice(draggedIdx, 1);
+                      arr.splice(targetIdx, 0, dragged);
+                      const base = Date.now();
+                      // Persist new ordering for all questions in this reviewer
+                      await Promise.all(
+                        arr.map((item, i) =>
+                          fetch(`/api/questions`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ reviewerId: selectedId, questionId: item.id, order: base + (arr.length - i) }),
+                          })
+                        )
+                      );
+                      await refreshSelected(selectedId);
+                      await refreshList();
+                      dragQuestionIdRef.current = null;
+                    }}
+                    className="rounded-card border border-slate-light bg-white/70 p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className="font-mono text-xs text-violet">Q{(questionPage - 1) * QUESTIONS_PER_PAGE + index + 1} · {q.type}</span>
@@ -392,28 +475,15 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {editingQuestion ? (
-                <QuestionForm
-                  initial={editingQuestion}
-                  onSubmit={handleUpdateQuestion}
-                  onCancel={() => setEditingQuestion(null)}
-                />
-              ) : showNewQuestion ? (
-                <QuestionForm
-                  onSubmit={handleAddQuestion}
-                  onCancel={() => setShowNewQuestion(false)}
-                />
-              ) : (
-                <button
-                  onClick={() => {
-                    setShowNewQuestion(true);
-                    setEditingQuestion(null);
-                  }}
-                  className="font-mono text-xs px-3 py-2 rounded-lg border border-slate-light hover:border-violet hover:text-violet transition-colors"
-                >
-                  + Add question
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setShowNewQuestion(true);
+                  setEditingQuestion(null);
+                }}
+                className="font-mono text-xs px-3 py-2 rounded-lg border border-slate-light hover:border-violet hover:text-violet transition-colors"
+              >
+                + Add question
+              </button>
             </div>
           )}
         </section>
